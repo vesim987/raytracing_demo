@@ -19,7 +19,7 @@ using namespace std;
 
 
 // forward declaration vect class
-class Vect;
+struct Vect;
 
 
 // helper functions
@@ -30,16 +30,14 @@ string setc(int row, int col);
 
 
 // prototype of direction class, representing direction with spherical coordinates
-class Direction {
-public:
+struct Direction {
 	float ang_v;
 	float ang_h;
 	Vect to_unit();
 };
 
 // full definition vect class
-class Vect {
-public:
+struct Vect {
 	float x, y, z;
 
 	void normalize() {
@@ -95,8 +93,7 @@ inline Vect Direction::to_unit() {
 
 
 
-class Ball {
-public:
+struct Ball {
 	Vect center;
 	float radius;
 
@@ -123,8 +120,7 @@ public:
 #define RAYSTEPS 5000
 
 
-class Game {
-public:
+struct Game {
 	vector<Ball> balls;
 	Vect pos;
 	Direction dir;
