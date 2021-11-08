@@ -1,5 +1,5 @@
 // uses X11 development libraries, might have to install with "sudo apt-get install libx11-dev"
-// compile with g++ -O3 demo_linux.cpp -lX11
+// compile with g++ -O3 demo_linux.cpp -mcpu=native -march=native -fopenmp -std=c++2a
 // run with ./a.out [width] [height]
 
 
@@ -8,9 +8,10 @@
 #include <stdio.h>
 #include <math.h>
 #include <vector>
-#include <X11/Xlib.h>
-#include "X11/keysym.h"
 #include <string>
+#include <span>
+#include <array>
+#include <time.h>
 
 
 
@@ -25,7 +26,6 @@ class Vect;
 char ray_char(Vect *ray, int refl);
 bool ray_done(Vect *ray);
 string setc(int row, int col);
-bool key_is_pressed(KeySym ks);
 
 
 
@@ -130,6 +130,9 @@ public:
 	Direction dir;
 	float width, height;
 	int xres, yres;
+  int frames;
+  time_t startTime;
+  std::string buf = setc(0, 0);
 
 	Game(Vect start_pos, Direction start_dir, float width, 
 			float height, int xres, int yres) {
@@ -139,6 +142,8 @@ public:
 		this->dir = start_dir;
 		this->xres = xres;
 		this->yres = yres;
+    buf.resize(6 + yres * (xres + 1));
+    startTime = time(0);
 	}
 
 	void add_ball(Ball b) {
@@ -160,7 +165,7 @@ public:
  		Vect v3 = {-v1.y, v1.x, 0};
  		v3.normalize();
  		v3.scale(width/2);
-
+#pragma omp parallel for
 		for (int row = 0; row < yres; ++row) {
 			for (int col = 0; col < xres; ++col) {
 				float up_offset = - ((float) row / (yres-1) - 0.5);
@@ -173,10 +178,7 @@ public:
 
 				Vect ray = pos;
 				// trace ray
-				vector<float> dists_to_balls;
-				for (int i = 0; i < balls.size(); ++i) {
-					dists_to_balls.push_back(0);
-				}
+        std::array<float, 3> dists_to_balls = {0};
 				int times_reflected = 0;
 				for (int i = 0; i < RAYSTEPS; ++i) {
 					if (ray_done(&ray)) {
@@ -213,74 +215,82 @@ public:
 						ray.add(move);
 					}
 				}
-
-				cout << setc(row, col) << ray_char(&ray, times_reflected) << flush;
+#pragma omp critical
+        buf[6 + row * (xres + 1) + col] = ray_char(&ray, times_reflected);
 			}
-		}
+#pragma omp critical
+      buf[6 + row * (xres + 1) + xres] = '\n';
+    }
+    frames++;
+    int s = (time(0) - startTime);
+    if (s != 0)
+      fprintf(stderr, "fps: %f %d\n", float(frames) / float(s), 6 + (xres + 1) * yres);
+    write(1, buf.c_str(), 6 + (xres + 1) * yres);
 	}
 
 	void start(void) {
-		KeySym keys[] = {XK_Up, XK_Down, XK_Left, XK_Right};
 		while (true) {
 			make_pic();
-			for (int key: keys) {
-				if (key_is_pressed(key)) {
-					if (key_is_pressed(XK_Shift_L)) {
-						move_view(key);
-					}
-					else {
-						move_position(key);
-					}
-				}
-			}
-		}
-	}
-
-	void move_view(KeySym key) {
-		if (key == XK_Up) {
-			dir.ang_v += MOVE_ANGLE;
-		}
-		else if (key == XK_Down) {
-			dir.ang_v -= MOVE_ANGLE;
-		}
-		if (key == XK_Left) {
-			dir.ang_h -= MOVE_ANGLE;
-		}
-		if (key == XK_Right) {
 			dir.ang_h += MOVE_ANGLE;
+      //move_view(XK_Right);
+			//for (int key: keys) {
+			//	if (key_is_pressed(key)) {
+			//		if (key_is_pressed(XK_Shift_L)) {
+			//			move_view(key);
+			//		}
+			//		else {
+			//			move_position(key);
+			//		}
+			//	}
+			//}
 		}
 	}
 
-	void move_position(KeySym key) {
-		Vect dir_vect = dir.to_unit();
-		float xmov = dir_vect.x;
-		float ymov = dir_vect.y;
-		float scale = 1/sqrt(xmov*xmov + ymov*ymov);
-		xmov *= scale;
-		ymov *= scale;
-		xmov *= MOVE_POSITION;
-		ymov *= MOVE_POSITION;
-		if (key == XK_Up) {
-			// move forward
-			pos.x += xmov;
-			pos.y += ymov;
-		}
-		else if (key == XK_Down) {
-			// move back
-			pos.x -= xmov;
-			pos.y -= ymov;
-		}
-		if (key == XK_Left) {
-			// move left
-			pos.x += ymov;
-			pos.y -= xmov;
-		}
-		if (key == XK_Right) {
-			// move right
-			pos.x -= ymov;
-			pos.y += xmov;
-		}
-	}
+	//void move_view(KeySym key) {
+	//	if (key == XK_Up) {
+	//		dir.ang_v += MOVE_ANGLE;
+	//	}
+	//	else if (key == XK_Down) {
+	//		dir.ang_v -= MOVE_ANGLE;
+	//	}
+	//	if (key == XK_Left) {
+	//		dir.ang_h -= MOVE_ANGLE;
+	//	}
+	//	if (key == XK_Right) {
+	//		dir.ang_h += MOVE_ANGLE;
+	//	}
+	//}
+
+	//void move_position(KeySym key) {
+	//	Vect dir_vect = dir.to_unit();
+	//	float xmov = dir_vect.x;
+	//	float ymov = dir_vect.y;
+	//	float scale = 1/sqrt(xmov*xmov + ymov*ymov);
+	//	xmov *= scale;
+	//	ymov *= scale;
+	//	xmov *= MOVE_POSITION;
+	//	ymov *= MOVE_POSITION;
+	//	if (key == XK_Up) {
+	//		// move forward
+	//		pos.x += xmov;
+	//		pos.y += ymov;
+	//	}
+	//	else if (key == XK_Down) {
+	//		// move back
+	//		pos.x -= xmov;
+	//		pos.y -= ymov;
+	//	}
+	//	if (key == XK_Left) {
+	//		// move left
+	//		pos.x += ymov;
+	//		pos.y -= xmov;
+	//	}
+	//	if (key == XK_Right) {
+	//		// move right
+	//		pos.x -= ymov;
+	//		pos.y += xmov;
+	//	}
+	//}
 
 	bool check_reflections(Vect *ray, Vect *move) {
 		// checks if ray has to be reflected on one of the objects, changes dir accordingly
@@ -311,7 +321,8 @@ char ray_char(Vect *ray, int refl) {
 	if ( ray->z <= 0 && abs(((int) floor(ray->x)) - ((int) floor(ray->y))) % 2 == 0) {
 		return '#';
 	}
-	else if (refl > 0) {
+	else 
+    if (refl > 0) {
 		if (refl < 4) {
 			return chars[refl-1];
 		}
@@ -322,17 +333,6 @@ char ray_char(Vect *ray, int refl) {
 	else {
 		return ' ';
 	}
-}
-
-
-bool key_is_pressed(KeySym ks) {
-    Display *dpy = XOpenDisplay(":0");
-    char keys_return[32];
-    XQueryKeymap(dpy, keys_return);
-    KeyCode kc2 = XKeysymToKeycode(dpy, ks);
-    bool isPressed = !!(keys_return[kc2 >> 3] & (1 << (kc2 & 7)));
-    XCloseDisplay(dpy);
-    return isPressed;
 }
 
 
