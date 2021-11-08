@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <vector>
+#include <cstring>
 #include <string>
 #include <span>
 #include <array>
@@ -167,6 +168,7 @@ public:
  		v3.scale(width/2);
 #pragma omp parallel for
 		for (int row = 0; row < yres; ++row) {
+      std::array<char, 512> row_array;
 			for (int col = 0; col < xres; ++col) {
 				float up_offset = - ((float) row / (yres-1) - 0.5);
 				float left_offset = (float) col / (xres-1) - 0.5;
@@ -215,11 +217,10 @@ public:
 						ray.add(move);
 					}
 				}
-#pragma omp critical
-        buf[6 + row * (xres + 1) + col] = ray_char(&ray, times_reflected);
+        row_array[col] = ray_char(&ray, times_reflected);
 			}
-#pragma omp critical
-      buf[6 + row * (xres + 1) + xres] = '\n';
+      row_array[xres] = '\n';
+      memcpy(&buf[6+ row * (xres + 1)], row_array.data(), xres + 1);
     }
     frames++;
     int s = (time(0) - startTime);
